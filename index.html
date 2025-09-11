@@ -5,6 +5,13 @@
 <title>Firmenspiel</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
+  /* --- Feinjustierung einzelner Logos --- */
+#game[data-company="Porsche"] #heroLogo img {
+  max-width: 220px;   /* kleiner machen */
+}
+#game[data-company="Ferrari"] #heroLogo img {
+  max-width: 200px;   /* kleiner machen */
+}
   :root{
     --brand:#0a6cff;        /* pro Marke gesetzt */
     --brand-2:#0046a4;
@@ -439,3 +446,4 @@ resetLobby();
 </script>
 </body>
 </html>
+
