@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<title>Firmenspiel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    --brand:#0a6cff;        /* pro Marke gesetzt */
+    --brand-2:#0046a4;
+    --ink:#0f172a;
+    --card:#ffffffee;
+    --bg1:#f8fbff;
+    --bg2:#f2f6ff;
+    --border:#dbe6ff;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:16px;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    color:var(--ink);
+    background: linear-gradient(180deg,var(--bg1),var(--bg2));
+  }
+  h1,h2,h3{margin:0 0 10px}
+
+  .grid{display:grid;gap:16px}
+  @media(min-width:920px){ .grid{grid-template-columns:1fr 1fr} }
+
+  .box{
+    position:relative;
+    border:2px solid var(--border);
+    border-radius:16px;
+    background:var(--card);
+    backdrop-filter:blur(2px);
+    padding:14px;
+  }
+
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input,select{
+    padding:10px;border:1px solid #cbd5e1;border-radius:10px;
+    font-size:1rem;background:#fff
+  }
+  input[type="number"]{width:120px}
+
+  button{
+    --b1:var(--brand); --b2:var(--brand-2);
+    padding:10px 16px;border-radius:12px;
+    border:1px solid var(--b2); color:#fff; cursor:pointer;
+    background: linear-gradient(180deg,var(--b1),var(--b2));
+    box-shadow:0 2px 0 0 #00000014;
+  }
+  button.ghost{
+    color:var(--brand-2); background:#eef6ff; border:1px solid #cfe3ff;
+  }
+  button:disabled{opacity:.5;cursor:not-allowed}
+
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .tab{
+    padding:8px 12px;border:1px solid var(--border);
+    border-radius:10px;background:#eef6ff;cursor:pointer
+  }
+  .tab.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+
+  .hidden{display:none}
+  #chartWrap{height:220px}
+  .brandPill{
+    padding:4px 10px;border-radius:999px;
+    border:1px solid var(--border);background:#f5f9ff;font-size:.9rem
+  }
+
+  /* Großes Logo im linken Kasten */
+  #infoBox{
+    display:grid;
+    grid-template-columns: 1fr;
+    align-items:start;
+    min-height:280px;
+  }
+  #heroLogo{
+    position:absolute;
+    right:24px;
+    top:60px;
+    width:min(280px,40vw);
+    max-width:320px;
+    opacity:0.25;
+    filter:saturate(110%);
+    pointer-events:none;
+    z-index:0;
+  }
+  #heroLogo img{ width:100%; height:auto; display:block; }
+  #infoBox > *:not(#heroLogo){ position:relative; z-index:1; }
+
+  /* Quellen-Dialog */
+  .credits{font-size:.9rem;text-decoration:underline;background:#fff8e1;border:1px dashed #f1ca55;color:#5a3f00}
+  dialog{border:none;border-radius:14px;padding:0;max-width:680px;width:92vw}
+  dialog .content{padding:16px}
+  dialog::backdrop{background:rgba(0,0,0,.35)}
+  .listRow{display:grid;grid-template-columns:160px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid #eee}
+</style>
+</head>
+<body>
+
+<h1>Firmenspiel</h1>
+
+<!-- Startmenü -->
+<div id="startMenu" class="box">
+  <div class="row" style="justify-content:space-between;align-items:center">
+    <h2>Spielmodus wählen</h2>
+    <button class="ghost credits" type="button" onclick="document.getElementById('srcDialog').showModal()">Logo-Quellen öffnen</button>
+  </div>
+  <div class="grid">
+    <div class="box">
+      <h3>Einzelspieler</h3>
+      <div class="row" style="margin-top:6px">
+        <input type="text" id="singleName" placeholder="Spielername" value="Spieler 1">
+        <select id="singleCompany" aria-label="Firma wählen"></select>
+        <button type="button" onclick="confirmSingle()">Starten</button>
+      </div>
+      <p style="margin-top:8px;color:#4b5563">Starte mit <em>einer</em> Firma auf deinem Gerät.</p>
+    </div>
+    <div class="box">
+      <h3>Mehrspieler (4–6 Firmen)</h3>
+      <p style="margin:6px 0 10px">Jede Firma nur einmal.</p>
+      <div class="row"><button type="button" onclick="showLobby()">Zur Lobby</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Lobby -->
+<div id="lobby" class="box hidden">
+  <h2>Lobby</h2>
+  <p>Wählt 4–6 Spieler und ihre Firmen (keine Duplikate):</p>
+  <div id="playerSetup"></div>
+  <div class="row" style="margin-top:10px">
+    <button type="button" class="ghost" onclick="addPlayer()">+ Spieler hinzufügen</button>
+    <button type="button" class="ghost" onclick="resetLobby()">Zurücksetzen</button>
+    <div style="flex:1"></div>
+    <button type="button" id="startBtn" onclick="startGame()" disabled>Spiel starten</button>
+  </div>
+</div>
+
+<!-- Spiel -->
+<div id="game" class="box hidden" data-company="">
+  <div class="row" style="justify-content:space-between;align-items:center; margin-bottom:10px">
+    <div>
+      <h2 id="companyName" style="margin:0">Firma</h2>
+      <div class="brandPill" id="brandPill">—</div>
+    </div>
+    <div class="tabs" id="tabs"></div>
+  </div>
+
+  <div class="grid">
+    <!-- Linke Box: Spieler/Kapital + großes Logo -->
+    <div class="box" id="infoBox">
+      <h3>Spieler & Kapital</h3>
+      <p>Spieler: <strong id="playerName">–</strong></p>
+      <p><strong>Kapital:</strong> <span id="capital">0</span> CHF</p>
+      <div class="row">
+        <input type="number" id="capitalInput" value="100" min="0" step="50">
+        <button type="button" onclick="updateCapital(true)">+ Betrag</button>
+        <button type="button" onclick="updateCapital(false)">– Betrag</button>
+      </div>
+      <!-- robustes Logo (lokal oder extern) -->
+      <div id="heroLogo" aria-hidden="true">
+        <img id="heroLogoImg" alt="" referrerpolicy="no-referrer">
+      </div>
+    </div>
+
+    <!-- Rechte Box: Graph -->
+    <div class="box">
+      <h3>Wertentwicklung</h3>
+      <p style="margin:0 0 6px"><strong id="valueLabel">Wert:</strong> <span id="valueCurrent">10’000</span> CHF</p>
+      <div id="chartWrap"><canvas id="chart"></canvas></div>
+
+      <div class="row" style="margin-top:10px">
+        <input type="number" id="valueInput" value="500" min="0" step="50">
+        <button type="button" onclick="addValue(true)">+ Wert</button>
+        <button type="button" onclick="addValue(false)">– Wert</button>
+      </div>
+
+      <div class="row" style="margin-top:6px">
+        <input type="number" id="valuePctInput" value="10" min="1" step="1">
+        <button type="button" onclick="addValuePct(true)">+ %</button>
+        <button type="button" onclick="addValuePct(false)">– %</button>
+        <span class="brandPill">Ändern um Prozent</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quellen -->
+<dialog id="srcDialog">
+  <div class="content">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h3>Logo-Quellen</h3>
+      <button class="ghost" type="button" onclick="document.getElementById('srcDialog').close()">Schließen</button>
+    </div>
+    <div class="listRow"><strong>McLaren</strong><a target="_blank" href="https://commons.wikimedia.org/wiki/File:McLaren_Automotive_logo.svg">Wikimedia: McLaren</a></div>
+    <div class="listRow"><strong>Porsche</strong><a target="_blank" href="https://commons.wikimedia.org/wiki/File:Porsche_logo.svg">Wikimedia: Porsche</a></div>
+    <div class="listRow"><strong>Koenigsegg</strong><a target="_blank" href="https://commons.wikimedia.org/wiki/File:Koenigsegg_logo.svg">Wikimedia: Koenigsegg</a></div>
+    <div class="listRow"><strong>Ferrari</strong><a target="_blank" href="https://commons.wikimedia.org/wiki/File:Ferrari_Logo.svg">Wikimedia: Ferrari</a></div>
+    <div class="listRow"><strong>Lamborghini</strong><a target="_blank" href="https://commons.wikimedia.org/wiki/File:Lamborghini_Logo.svg">Wikimedia: Lamborghini</a></div>
+    <div class="listRow"><strong>Bugatti</strong><a target="_blank" href="https://commons.wikimedia.org/wiki/File:Bugatti_logo.svg">Wikimedia: Bugatti</a></div>
+    <div class="listRow"><strong>Aston Martin</strong><a target="_blank" href="https://commons.wikimedia.org/wiki/File:Aston_Martin_logo.svg">Wikimedia: Aston Martin</a></div>
+  </div>
+</dialog>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+/* ===== Markenliste (Pagani → Aston Martin) ===== */
+const ALL_COMPANIES = [
+  "McLaren","Porsche","Koenigsegg","Ferrari","Lamborghini","Bugatti","Aston Martin"
+];
+
+/* Farbtöne (nahe an CI) – Aston Martin ergänzt */
+const THEMES = {
+  "McLaren":     {brand:"#ff8700", brand2:"#c85f00", bg1:"#fff6ed", bg2:"#ffe7cf"},
+  "Porsche":     {brand:"#e4002b", brand2:"#a30b1a", bg1:"#fff4f4", bg2:"#ffe6e4"},
+  "Koenigsegg":  {brand:"#f4a300", brand2:"#b87400", bg1:"#fff8e8", bg2:"#ffeecc"},
+  "Ferrari":     {brand:"#d40000", brand2:"#a30000", bg1:"#fff3f2", bg2:"#ffe1df"},
+  "Lamborghini": {brand:"#f7d417", brand2:"#b69d00", bg1:"#fff9df", bg2:"#fff0b8"},
+  "Bugatti":     {brand:"#2e5cb8", brand2:"#0b3c8e", bg1:"#eef4ff", bg2:"#deebff"},
+  /* Aston Martin: klassisches British Racing Green */
+  "Aston Martin":{brand:"#005a2b", brand2:"#0b3a2b", bg1:"#eaf5ef", bg2:"#d8eee3"}
+};
+
+/* Logo-Quellen – lokales Asset zuerst, dann Wikimedia-Fallback */
+const LOGO_SOURCES = {
+  "McLaren":      ["assets/mclaren.svg",      "https://upload.wikimedia.org/wikipedia/commons/5/55/McLaren_Automotive_logo.svg"],
+  "Porsche":      ["assets/porsche.svg",      "https://upload.wikimedia.org/wikipedia/commons/1/1e/Porsche_logo.svg"],
+  "Koenigsegg":   ["assets/koenigsegg.svg",   "https://upload.wikimedia.org/wikipedia/commons/4/42/Koenigsegg_logo.svg"],
+  "Ferrari":      ["assets/ferrari.svg",      "https://upload.wikimedia.org/wikipedia/commons/d/d8/Ferrari_Logo.svg"],
+  "Lamborghini":  ["assets/lamborghini.svg",  "https://upload.wikimedia.org/wikipedia/commons/6/6b/Lamborghini_Logo.svg"],
+  "Bugatti":      ["assets/bugatti.svg",      "https://upload.wikimedia.org/wikipedia/commons/0/0b/Bugatti_logo.svg"],
+  "Aston Martin": ["assets/astonmartin.svg",  "https://upload.wikimedia.org/wikipedia/commons/f/fb/Aston_Martin_logo.svg"]
+};
+
+/* ===== Zustand ===== */
+let players=[]; 
+let companiesData={}; 
+let current=0; 
+let chart;
+
+/* Startmenü füllen */
+document.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById("singleCompany");
+  ALL_COMPANIES.forEach(c=>{
+    const o=document.createElement("option"); o.value=c; o.textContent=c; sel.appendChild(o);
+  });
+});
+
+/* Modus & Lobby */
+function showLobby(){
+  document.getElementById("startMenu").classList.add("hidden");
+  document.getElementById("lobby").classList.remove("hidden");
+}
+function confirmSingle(){
+  const name=(document.getElementById("singleName").value||"Spieler 1").trim();
+  const company=document.getElementById("singleCompany").value; 
+  if(!company) return;
+
+  companiesData={}; 
+  companiesData[company]={player:name,capital:1000,values:[10000]}; 
+  current=0;
+
+  applyTheme(company);
+
+  document.getElementById("startMenu").classList.add("hidden");
+  document.getElementById("game").classList.remove("hidden");
+  renderTabs(); 
+  renderGame();
+}
+
+function renderLobby(){
+  const div=document.getElementById("playerSetup"); 
+  div.innerHTML="";
+  players.forEach((p,i)=>{
+    const row=document.createElement("div"); row.className="row";
+
+    const nameInput=document.createElement("input"); 
+    nameInput.type="text"; nameInput.value=p.name; nameInput.placeholder="Spielername";
+    nameInput.oninput=()=>{ players[i].name=nameInput.value; checkStart(); };
+
+    const select=document.createElement("select");
+    const empty=document.createElement("option"); empty.value=""; empty.textContent="— Firma wählen —"; 
+    select.appendChild(empty);
+
+    const taken=new Set(players.map(x=>x.company).filter(Boolean));
+    ALL_COMPANIES.forEach(c=>{
+      const opt=document.createElement("option"); opt.value=c; opt.textContent=c;
+      if(p.company===c) opt.selected=true; 
+      if(taken.has(c)&&p.company!==c) opt.disabled=true;
+      select.appendChild(opt);
+    });
+    select.onchange=()=>{ players[i].company=select.value; renderLobby(); checkStart(); };
+
+    const del=document.createElement("button"); del.type="button"; del.className="ghost"; del.textContent="✕";
+    del.onclick=()=>{ players.splice(i,1); renderLobby(); checkStart(); };
+
+    row.appendChild(nameInput); row.appendChild(select); row.appendChild(del); 
+    div.appendChild(row);
+  });
+  checkStart();
+}
+function addPlayer(){ if(players.length<6){ players.push({name:"Spieler "+(players.length+1), company:""}); renderLobby(); } }
+function resetLobby(){ players=[]; for(let i=0;i<4;i++) addPlayer(); }
+function checkStart(){
+  const filled=players.filter(p=>p.name?.trim()&&p.company).length;
+  const unique=new Set(players.map(p=>p.company).filter(Boolean)).size;
+  document.getElementById("startBtn").disabled=!(filled>=4 && filled===unique);
+}
+function startGame(){
+  companiesData={}; 
+  players.filter(p=>p.company).forEach(p=>{
+    companiesData[p.company]={player:p.name.trim()||"Spieler",capital:1000,values:[10000]};
+  });
+  current=0; 
+  const first=Object.keys(companiesData)[0]; 
+  if(first) applyTheme(first);
+
+  document.getElementById("lobby").classList.add("hidden");
+  document.getElementById("game").classList.remove("hidden");
+  renderTabs(); 
+  renderGame();
+}
+
+/* Tabs */
+function renderTabs(){
+  const div=document.getElementById("tabs"); 
+  div.innerHTML="";
+  const keys=Object.keys(companiesData);
+  keys.forEach((c,i)=>{
+    const b=document.createElement("button"); 
+    b.type="button";
+    b.className="tab"+(i===current?" active":""); 
+    b.textContent=c;
+    b.onclick=()=>{ current=i; applyTheme(c); renderTabs(); renderGame(); };
+    div.appendChild(b);
+  });
+}
+
+/* ======== LOGO-LOADER mit Fallbacks ======== */
+function loadWithFallback(urls, onSuccess, onFail){
+  if(!urls || urls.length===0){ onFail && onFail(); return; }
+  const [head, ...rest] = urls;
+  const test = new Image();
+  test.referrerPolicy = 'no-referrer';
+  test.onload = () => onSuccess(head);
+  test.onerror = () => loadWithFallback(rest, onSuccess, onFail);
+  test.src = head;
+}
+
+/* Theme + Logo im linken Kasten */
+function applyTheme(company){
+  const t=THEMES[company]||{};
+  document.documentElement.style.setProperty('--brand', t.brand||'#0a6cff');
+  document.documentElement.style.setProperty('--brand-2', t.brand2||'#0046a4');
+  document.documentElement.style.setProperty('--bg1', t.bg1||'#f8fbff');
+  document.documentElement.style.setProperty('--bg2', t.bg2||'#f2f6ff');
+
+  document.getElementById("brandPill").textContent=company+" • Theme";
+  document.getElementById("game").dataset.company=company;
+
+  const img=document.getElementById("heroLogoImg");
+  img.src=""; img.alt=""; img.style.display="none";
+
+  const sources = LOGO_SOURCES[company] || [];
+  loadWithFallback(
+    sources,
+    (okUrl)=>{
+      img.src = okUrl;
+      img.alt = company + " Logo";
+      img.style.display = "block";
+    },
+    ()=>{ /* nichts anzeigen, wenn alles fehlschlägt */ }
+  );
+}
+
+function currentKey(){ return Object.keys(companiesData)[current]; }
+function currentValues(){ return companiesData[currentKey()].values; }
+function currentLast(){ const v=currentValues(); return v[v.length-1]; }
+
+/* Render Spiel */
+function renderGame(){
+  const company=currentKey(), data=companiesData[company];
+  document.getElementById("companyName").textContent="Firma: "+company;
+  document.getElementById("playerName").textContent=data.player;
+  document.getElementById("capital").textContent=data.capital.toLocaleString('de-CH');
+  document.getElementById("valueCurrent").textContent=currentLast().toLocaleString('de-CH');
+
+  const values=data.values;
+  if(chart) chart.destroy();
+  const ctx=document.getElementById("chart").getContext("2d");
+  const brandStroke=getComputedStyle(document.documentElement).getPropertyValue('--brand-2').trim()||"#1e7f34";
+  chart=new Chart(ctx,{
+    type:"line",
+    data:{
+      labels: values.map((_,i)=>i+1),
+      datasets:[{
+        data: values,
+        borderWidth: 2, pointRadius: 3, tension: .25,
+        borderColor: brandStroke,
+        segment:{ borderColor: s => s.p1.parsed.y < s.p0.parsed.y ? "#cc0000" : brandStroke }
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{ y:{ beginAtZero:true } }, plugins:{ legend:{ display:false } }
+    }
+  });
+}
+
+/* Wert ändern */
+function addValue(isPlus){
+  const delta=+document.getElementById("valueInput").value || 0;
+  const arr=currentValues(), last=arr[arr.length-1];
+  arr.push(last + (isPlus?delta:-delta));
+  renderGame();
+}
+function addValuePct(isPlus){
+  const pct=+document.getElementById("valuePctInput").value || 0;
+  const arr=currentValues(), last=arr[arr.length-1];
+  const factor=isPlus?(1+pct/100):(1-pct/100);
+  const next=Math.max(0, Math.round(last*factor));
+  arr.push(next);
+  renderGame();
+}
+
+/* Kapital ändern */
+function updateCapital(isPlus){
+  const val=+document.getElementById("capitalInput").value || 0;
+  const k=currentKey(); companiesData[k].capital += isPlus?val:-val;
+  renderGame();
+}
+
+/* Mehrspieler-Defaults */
+resetLobby();
+</script>
+</body>
+</html>
