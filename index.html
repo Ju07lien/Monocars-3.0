@@ -53,6 +53,9 @@
   button.ghost{
     color:var(--brand-2); background:#eef6ff; border:1px solid #cfe3ff;
   }
+  button.danger{
+    color:#fff; background:linear-gradient(180deg,#ef4444,#b91c1c); border:1px solid #7f1d1d;
+  }
   button:disabled{opacity:.5;cursor:not-allowed}
 
   .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -105,12 +108,8 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     background:#f8fafc;
   }
-  .keys{
-    display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px;
-  }
-  .keys button{
-    background:#f4f6ff; color:#111827; border:1px solid #dbe6ff;
-  }
+  .keys{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
+  .keys button{ background:#f4f6ff; color:#111827; border:1px solid #dbe6ff; }
   .keys button.op{ background:#eef6ff; }
   .keys button.eq{ background:linear-gradient(180deg,var(--brand),var(--brand-2)); color:#fff; border-color:var(--brand-2); }
   .calcActions{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap}
@@ -126,17 +125,33 @@
   /* Feinjustierung: Porsche & Ferrari Logos etwas kleiner */
   #game[data-company="Porsche"] #heroLogo img { max-width:220px; }
   #game[data-company="Ferrari"] #heroLogo img { max-width:200px; }
+
+  /* Fortsetzen-Banner */
+  .resume{
+    display:none; margin-bottom:12px; padding:10px 12px; border:1px solid #c7f9cc; background:#effcf1; border-radius:12px;
+  }
+  .resume.show{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
 </style>
 </head>
 <body>
 
 <h1>Firmenspiel</h1>
 
+<!-- Fortsetzen-Banner -->
+<div id="resumeBar" class="resume">
+  <span>Es gibt ein gespeichertes Spiel.</span>
+  <button class="ghost" type="button" onclick="resumeGame()">Fortsetzen</button>
+  <button class="ghost" type="button" onclick="discardSaved()">Verwerfen</button>
+</div>
+
 <!-- Startmenü -->
 <div id="startMenu" class="box">
   <div class="row" style="justify-content:space-between;align-items:center">
     <h2>Spielmodus wählen</h2>
-    <button class="ghost credits" type="button" onclick="document.getElementById('srcDialog').showModal()">Logo-Quellen öffnen</button>
+    <div class="row">
+      <button class="ghost" type="button" onclick="manualSave()">Speichern</button>
+      <button class="ghost" type="button" onclick="document.getElementById('srcDialog').showModal()">Logo-Quellen</button>
+    </div>
   </div>
   <div class="grid">
     <div class="box">
@@ -158,7 +173,13 @@
 
 <!-- Lobby -->
 <div id="lobby" class="box hidden">
-  <h2>Lobby</h2>
+  <div class="row" style="justify-content:space-between;align-items:center">
+    <h2>Lobby</h2>
+    <div class="row">
+      <button class="ghost" type="button" onclick="backToStart()">Zurück zum Start</button>
+      <button class="ghost" type="button" onclick="manualSave()">Speichern</button>
+    </div>
+  </div>
   <p>Wählt 4–6 Spieler und ihre Firmen (keine Duplikate):</p>
   <div id="playerSetup"></div>
   <div class="row" style="margin-top:10px">
@@ -172,14 +193,21 @@
 <!-- Spiel -->
 <div id="game" class="box hidden" data-company="">
   <div class="row" style="justify-content:space-between;align-items:center; margin-bottom:10px">
-    <div>
+    <div class="row" style="gap:8px; align-items:center">
+      <button class="ghost" type="button" onclick="backToStart()">← Start</button>
+      <button class="ghost" type="button" onclick="backToLobby()">← Lobby</button>
+      <button class="ghost" type="button" onclick="manualSave()">Speichern</button>
+      <button class="danger" type="button" onclick="newGame()">Neues Spiel</button>
+    </div>
+    <div style="text-align:right">
       <h2 id="companyName" style="margin:0">Firma</h2>
       <div class="brandPill" id="brandPill">—</div>
     </div>
-    <div class="tabs" id="tabs"></div>
   </div>
 
-  <div class="grid">
+  <div class="tabs" id="tabs"></div>
+
+  <div class="grid" style="margin-top:10px">
     <!-- Linke Box: Spieler/Kapital + Logo + Taschenrechner -->
     <div class="box" id="infoBox">
       <h3>Spieler & Kapital</h3>
@@ -300,10 +328,99 @@ const LOGO_SOURCES = {
 };
 
 /* ===== Zustand ===== */
-let players=[]; 
-let companiesData={}; 
-let current=0; 
-let chart;
+let players=[];           // Lobby-Spieler
+let companiesData={};     // { company: {player, capital, values[]} }
+let current=0;            // aktiver Tab Index
+let chart;                // Chart.js-Instanz
+let screen="start";       // "start" | "lobby" | "game"
+
+/* ==== Persistenz (Autosave) ==== */
+const STORAGE_KEY = "firmenspiel_state_v2";
+
+function saveState(){
+  const state = {
+    players,
+    companiesData,
+    current,
+    screen,
+    timestamp: Date.now()
+  };
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e){}
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+
+function hasSaved(){
+  return !!localStorage.getItem(STORAGE_KEY);
+}
+
+function discardSaved(){
+  localStorage.removeItem(STORAGE_KEY);
+  document.getElementById("resumeBar").classList.remove("show");
+}
+
+/* Manuelles Speichern (UI-Button) */
+function manualSave(){
+  saveState();
+  alert("Spielstand gespeichert (lokal auf diesem Gerät).");
+}
+
+/* Fortsetzen aus Banner */
+function resumeGame(){
+  const s = loadState();
+  if(!s) return;
+  players = s.players || [];
+  companiesData = s.companiesData || {};
+  current = +s.current || 0;
+  screen  = s.screen || "start";
+
+  // View setzen
+  document.getElementById("startMenu").classList.add("hidden");
+  document.getElementById("lobby").classList.add("hidden");
+  document.getElementById("game").classList.add("hidden");
+  if(screen==="start"){
+    document.getElementById("startMenu").classList.remove("hidden");
+  }else if(screen==="lobby"){
+    document.getElementById("lobby").classList.remove("hidden");
+    renderLobby();
+  }else{
+    document.getElementById("game").classList.remove("hidden");
+    const ck = currentKey(); if(ck) applyTheme(ck);
+    renderTabs(); renderGame();
+  }
+  document.getElementById("resumeBar").classList.remove("show");
+}
+
+/* Navigation */
+function backToStart(){
+  screen="start";
+  document.getElementById("startMenu").classList.remove("hidden");
+  document.getElementById("lobby").classList.add("hidden");
+  document.getElementById("game").classList.add("hidden");
+  saveState();
+}
+function backToLobby(){
+  screen="lobby";
+  document.getElementById("startMenu").classList.add("hidden");
+  document.getElementById("lobby").classList.remove("hidden");
+  document.getElementById("game").classList.add("hidden");
+  renderLobby();
+  saveState();
+}
+function newGame(){
+  if(!confirm("Neues Spiel starten? Der gespeicherte Spielstand wird gelöscht.")) return;
+  players=[]; companiesData={}; current=0; screen="start"; discardSaved();
+  // Views:
+  document.getElementById("startMenu").classList.remove("hidden");
+  document.getElementById("lobby").classList.add("hidden");
+  document.getElementById("game").classList.add("hidden");
+}
 
 /* Startmenü füllen */
 document.addEventListener('DOMContentLoaded', () => {
@@ -311,10 +428,16 @@ document.addEventListener('DOMContentLoaded', () => {
   ALL_COMPANIES.forEach(c=>{
     const o=document.createElement("option"); o.value=c; o.textContent=c; sel.appendChild(o);
   });
+
+  // Resume-Banner zeigen, wenn Speicher vorhanden:
+  if(hasSaved()){
+    document.getElementById("resumeBar").classList.add("show");
+  }
 });
 
 /* Modus & Lobby */
 function showLobby(){
+  screen="lobby"; saveState();
   document.getElementById("startMenu").classList.add("hidden");
   document.getElementById("lobby").classList.remove("hidden");
 }
@@ -326,6 +449,7 @@ function confirmSingle(){
   companiesData={}; 
   companiesData[company]={player:name,capital:1000,values:[10000]}; 
   current=0;
+  screen="game";
 
   applyTheme(company);
 
@@ -333,6 +457,7 @@ function confirmSingle(){
   document.getElementById("game").classList.remove("hidden");
   renderTabs(); 
   renderGame();
+  saveState();
 }
 
 function renderLobby(){
@@ -343,7 +468,7 @@ function renderLobby(){
 
     const nameInput=document.createElement("input"); 
     nameInput.type="text"; nameInput.value=p.name; nameInput.placeholder="Spielername";
-    nameInput.oninput=()=>{ players[i].name=nameInput.value; checkStart(); };
+    nameInput.oninput=()=>{ players[i].name=nameInput.value; checkStart(); saveState(); };
 
     const select=document.createElement("select");
     const empty=document.createElement("option"); empty.value=""; empty.textContent="— Firma wählen —"; 
@@ -356,18 +481,18 @@ function renderLobby(){
       if(taken.has(c)&&p.company!==c) opt.disabled=true;
       select.appendChild(opt);
     });
-    select.onchange=()=>{ players[i].company=select.value; renderLobby(); checkStart(); };
+    select.onchange=()=>{ players[i].company=select.value; renderLobby(); checkStart(); saveState(); };
 
     const del=document.createElement("button"); del.type="button"; del.className="ghost"; del.textContent="✕";
-    del.onclick=()=>{ players.splice(i,1); renderLobby(); checkStart(); };
+    del.onclick=()=>{ players.splice(i,1); renderLobby(); checkStart(); saveState(); };
 
     row.appendChild(nameInput); row.appendChild(select); row.appendChild(del); 
     div.appendChild(row);
   });
   checkStart();
 }
-function addPlayer(){ if(players.length<6){ players.push({name:"Spieler "+(players.length+1), company:""}); renderLobby(); } }
-function resetLobby(){ players=[]; for(let i=0;i<4;i++) addPlayer(); }
+function addPlayer(){ if(players.length<6){ players.push({name:"Spieler "+(players.length+1), company:""}); renderLobby(); saveState(); } }
+function resetLobby(){ players=[]; for(let i=0;i<4;i++) addPlayer(); saveState(); }
 function checkStart(){
   const filled=players.filter(p=>p.name?.trim()&&p.company).length;
   const unique=new Set(players.map(p=>p.company).filter(Boolean)).size;
@@ -381,6 +506,8 @@ function startGame(){
   current=0; 
   const first=Object.keys(companiesData)[0]; 
   if(first) applyTheme(first);
+
+  screen="game"; saveState();
 
   document.getElementById("lobby").classList.add("hidden");
   document.getElementById("game").classList.remove("hidden");
@@ -398,7 +525,7 @@ function renderTabs(){
     b.type="button";
     b.className="tab"+(i===current?" active":""); 
     b.textContent=c;
-    b.onclick=()=>{ current=i; applyTheme(c); renderTabs(); renderGame(); };
+    b.onclick=()=>{ current=i; applyTheme(c); renderTabs(); renderGame(); saveState(); };
     div.appendChild(b);
   });
 }
@@ -479,7 +606,7 @@ function addValue(isPlus){
   const delta=+document.getElementById("valueInput").value || 0;
   const arr=currentValues(), last=arr[arr.length-1];
   arr.push(last + (isPlus?delta:-delta));
-  renderGame();
+  renderGame(); saveState();
 }
 function addValuePct(isPlus){
   const pct=+document.getElementById("valuePctInput").value || 0;
@@ -487,14 +614,14 @@ function addValuePct(isPlus){
   const factor=isPlus?(1+pct/100):(1-pct/100);
   const next=Math.max(0, Math.round(last*factor));
   arr.push(next);
-  renderGame();
+  renderGame(); saveState();
 }
 
 /* Kapital ändern */
 function updateCapital(isPlus){
   const val=+document.getElementById("capitalInput").value || 0;
   const k=currentKey(); companiesData[k].capital += isPlus?val:-val;
-  renderGame();
+  renderGame(); saveState();
 }
 
 /* ===== Taschenrechner Logik ===== */
@@ -510,13 +637,11 @@ function calcEval(){
   const el=document.getElementById("calcDisplay");
   const expr = el.value.trim();
   if(!expr){ return; }
-  // Nur erlaubte Zeichen (Zahlen, +-*/()., Leerzeichen)
   if(!/^[0-9+\-*/().\s]+$/.test(expr)){ alert("Nur Zahlen und + - * / ( ) erlaubt."); return; }
   try{
-    // sichere Auswertung: new Function mit geprüften Zeichen
     const result = Function(`"use strict"; return (${expr});`)();
     if(!isFinite(result)) throw new Error("Ungültig");
-    el.value = (Math.round(result*100)/100).toString(); // auf 2 Nachkommastellen
+    el.value = (Math.round(result*100)/100).toString();
   }catch(e){
     alert("Ausdruck ungültig.");
   }
@@ -533,6 +658,9 @@ function calcToValue(){
   const v=parseFloat(el.value.replace(',','.'));
   if(!isNaN(v)){ document.getElementById("valueInput").value = v; }
 }
+
+/* Vor Verlassen der Seite sicherheitshalber speichern */
+window.addEventListener("beforeunload", saveState);
 
 /* Mehrspieler-Defaults */
 resetLobby();
