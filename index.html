@@ -5,20 +5,13 @@
 <title>Firmenspiel</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  /* --- Feinjustierung einzelner Logos --- */
-#game[data-company="Porsche"] #heroLogo img {
-  max-width: 220px;   /* kleiner machen */
-}
-#game[data-company="Ferrari"] #heroLogo img {
-  max-width: 200px;   /* kleiner machen */
-}
   :root{
     --brand:#0a6cff;        /* pro Marke gesetzt */
     --brand-2:#0046a4;
     --ink:#0f172a;
     --card:#ffffffee;
     --bg1:#f8fbff;
-    --bg2:#f2f6ff;
+    --bg2:#f2f6f5;
     --border:#dbe6ff;
   }
 
@@ -76,7 +69,7 @@
     border:1px solid var(--border);background:#f5f9ff;font-size:.9rem
   }
 
-  /* Großes Logo im linken Kasten */
+  /* Linke Info-Box mit großem Logo */
   #infoBox{
     display:grid;
     grid-template-columns: 1fr;
@@ -97,12 +90,42 @@
   #heroLogo img{ width:100%; height:auto; display:block; }
   #infoBox > *:not(#heroLogo){ position:relative; z-index:1; }
 
+  /* Taschenrechner */
+  .calc{
+    margin-top:12px;
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    padding:10px;
+    background:#ffffff;
+    max-width:360px;
+  }
+  .calcTitle{font-weight:600;margin-bottom:6px}
+  .calcDisplay{
+    width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:10px; font-size:1.05rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    background:#f8fafc;
+  }
+  .keys{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px;
+  }
+  .keys button{
+    background:#f4f6ff; color:#111827; border:1px solid #dbe6ff;
+  }
+  .keys button.op{ background:#eef6ff; }
+  .keys button.eq{ background:linear-gradient(180deg,var(--brand),var(--brand-2)); color:#fff; border-color:var(--brand-2); }
+  .calcActions{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap}
+  .calcActions button{ background:#eefbf3; color:#065f46; border:1px solid #bbf7d0 }
+
   /* Quellen-Dialog */
   .credits{font-size:.9rem;text-decoration:underline;background:#fff8e1;border:1px dashed #f1ca55;color:#5a3f00}
   dialog{border:none;border-radius:14px;padding:0;max-width:680px;width:92vw}
   dialog .content{padding:16px}
   dialog::backdrop{background:rgba(0,0,0,.35)}
   .listRow{display:grid;grid-template-columns:160px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid #eee}
+
+  /* Feinjustierung: Porsche & Ferrari Logos etwas kleiner */
+  #game[data-company="Porsche"] #heroLogo img { max-width:220px; }
+  #game[data-company="Ferrari"] #heroLogo img { max-width:200px; }
 </style>
 </head>
 <body>
@@ -157,7 +180,7 @@
   </div>
 
   <div class="grid">
-    <!-- Linke Box: Spieler/Kapital + großes Logo -->
+    <!-- Linke Box: Spieler/Kapital + Logo + Taschenrechner -->
     <div class="box" id="infoBox">
       <h3>Spieler & Kapital</h3>
       <p>Spieler: <strong id="playerName">–</strong></p>
@@ -167,7 +190,41 @@
         <button type="button" onclick="updateCapital(true)">+ Betrag</button>
         <button type="button" onclick="updateCapital(false)">– Betrag</button>
       </div>
-      <!-- robustes Logo (lokal oder extern) -->
+
+      <!-- Taschenrechner -->
+      <div class="calc">
+        <div class="calcTitle">Taschenrechner</div>
+        <input id="calcDisplay" class="calcDisplay" type="text" inputmode="decimal" placeholder="z.B. (1250+300)*1.07" />
+        <div class="keys">
+          <button type="button" onclick="calcIns('7')">7</button>
+          <button type="button" onclick="calcIns('8')">8</button>
+          <button type="button" onclick="calcIns('9')">9</button>
+          <button type="button" class="op" onclick="calcIns('/')">÷</button>
+
+          <button type="button" onclick="calcIns('4')">4</button>
+          <button type="button" onclick="calcIns('5')">5</button>
+          <button type="button" onclick="calcIns('6')">6</button>
+          <button type="button" class="op" onclick="calcIns('*')">×</button>
+
+          <button type="button" onclick="calcIns('1')">1</button>
+          <button type="button" onclick="calcIns('2')">2</button>
+          <button type="button" onclick="calcIns('3')">3</button>
+          <button type="button" class="op" onclick="calcIns('-')">−</button>
+
+          <button type="button" onclick="calcIns('0')">0</button>
+          <button type="button" onclick="calcIns('.')">.</button>
+          <button type="button" onclick="calcIns('(')">(</button>
+          <button type="button" onclick="calcIns(')')">)</button>
+        </div>
+        <div class="calcActions">
+          <button type="button" class="ghost" onclick="calcClear()">C</button>
+          <button type="button" class="eq" onclick="calcEval()">=</button>
+          <button type="button" onclick="calcToCapital()">→ Kapital</button>
+          <button type="button" onclick="calcToValue()">→ Wert</button>
+        </div>
+      </div>
+
+      <!-- Großes Logo -->
       <div id="heroLogo" aria-hidden="true">
         <img id="heroLogoImg" alt="" referrerpolicy="no-referrer">
       </div>
@@ -215,12 +272,12 @@
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-/* ===== Markenliste (Pagani → Aston Martin) ===== */
+/* ===== Markenliste (mit Aston Martin statt Pagani) ===== */
 const ALL_COMPANIES = [
   "McLaren","Porsche","Koenigsegg","Ferrari","Lamborghini","Bugatti","Aston Martin"
 ];
 
-/* Farbtöne (nahe an CI) – Aston Martin ergänzt */
+/* Farbtöne (nahe an CI) */
 const THEMES = {
   "McLaren":     {brand:"#ff8700", brand2:"#c85f00", bg1:"#fff6ed", bg2:"#ffe7cf"},
   "Porsche":     {brand:"#e4002b", brand2:"#a30b1a", bg1:"#fff4f4", bg2:"#ffe6e4"},
@@ -228,7 +285,6 @@ const THEMES = {
   "Ferrari":     {brand:"#d40000", brand2:"#a30000", bg1:"#fff3f2", bg2:"#ffe1df"},
   "Lamborghini": {brand:"#f7d417", brand2:"#b69d00", bg1:"#fff9df", bg2:"#fff0b8"},
   "Bugatti":     {brand:"#2e5cb8", brand2:"#0b3c8e", bg1:"#eef4ff", bg2:"#deebff"},
-  /* Aston Martin: klassisches British Racing Green */
   "Aston Martin":{brand:"#005a2b", brand2:"#0b3a2b", bg1:"#eaf5ef", bg2:"#d8eee3"}
 };
 
@@ -388,7 +444,7 @@ function currentKey(){ return Object.keys(companiesData)[current]; }
 function currentValues(){ return companiesData[currentKey()].values; }
 function currentLast(){ const v=currentValues(); return v[v.length-1]; }
 
-/* Render Spiel */
+/* Chart Render */
 function renderGame(){
   const company=currentKey(), data=companiesData[company];
   document.getElementById("companyName").textContent="Firma: "+company;
@@ -441,9 +497,45 @@ function updateCapital(isPlus){
   renderGame();
 }
 
+/* ===== Taschenrechner Logik ===== */
+function calcIns(txt){
+  const el=document.getElementById("calcDisplay");
+  el.value += txt;
+  el.focus();
+}
+function calcClear(){
+  document.getElementById("calcDisplay").value="";
+}
+function calcEval(){
+  const el=document.getElementById("calcDisplay");
+  const expr = el.value.trim();
+  if(!expr){ return; }
+  // Nur erlaubte Zeichen (Zahlen, +-*/()., Leerzeichen)
+  if(!/^[0-9+\-*/().\s]+$/.test(expr)){ alert("Nur Zahlen und + - * / ( ) erlaubt."); return; }
+  try{
+    // sichere Auswertung: new Function mit geprüften Zeichen
+    const result = Function(`"use strict"; return (${expr});`)();
+    if(!isFinite(result)) throw new Error("Ungültig");
+    el.value = (Math.round(result*100)/100).toString(); // auf 2 Nachkommastellen
+  }catch(e){
+    alert("Ausdruck ungültig.");
+  }
+}
+function calcToCapital(){
+  calcEval();
+  const el=document.getElementById("calcDisplay");
+  const v=parseFloat(el.value.replace(',','.'));
+  if(!isNaN(v)){ document.getElementById("capitalInput").value = v; }
+}
+function calcToValue(){
+  calcEval();
+  const el=document.getElementById("calcDisplay");
+  const v=parseFloat(el.value.replace(',','.'));
+  if(!isNaN(v)){ document.getElementById("valueInput").value = v; }
+}
+
 /* Mehrspieler-Defaults */
 resetLobby();
 </script>
 </body>
 </html>
-
