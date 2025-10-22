@@ -258,7 +258,7 @@
       </div>
     </div>
 
-    <!-- Rechte Box: Graph -->
+    <!-- Rechte Box: Graph + Wert + Eigentumsanteil -->
     <div class="box">
       <h3>Wertentwicklung</h3>
       <p style="margin:0 0 6px"><strong id="valueLabel">Wert:</strong> <span id="valueCurrent">10’000</span> CHF</p>
@@ -275,6 +275,17 @@
         <button type="button" onclick="addValuePct(true)">+ %</button>
         <button type="button" onclick="addValuePct(false)">– %</button>
         <span class="brandPill">Ändern um Prozent</span>
+      </div>
+
+      <!-- Eigentumsanteil -->
+      <div class="box" style="margin-top:10px">
+        <h4>Eigentumsanteil</h4>
+        <p><strong>Anteil:</strong> <span id="shareCurrent">100</span>%</p>
+        <div class="row">
+          <input type="number" id="shareInput" value="5" min="1" step="1">
+          <button type="button" onclick="updateShare(true)">+ %</button>
+          <button type="button" onclick="updateShare(false)">– %</button>
+        </div>
       </div>
     </div>
   </div>
@@ -329,7 +340,7 @@ const LOGO_SOURCES = {
 
 /* ===== Zustand ===== */
 let players=[];           // Lobby-Spieler
-let companiesData={};     // { company: {player, capital, values[]} }
+let companiesData={};     // { company: {player, capital, values[], share} }
 let current=0;            // aktiver Tab Index
 let chart;                // Chart.js-Instanz
 let screen="start";       // "start" | "lobby" | "game"
@@ -447,7 +458,7 @@ function confirmSingle(){
   if(!company) return;
 
   companiesData={}; 
-  companiesData[company]={player:name,capital:1000,values:[10000]}; 
+  companiesData[company]={player:name,capital:1000,values:[10000],share:100}; 
   current=0;
   screen="game";
 
@@ -501,7 +512,7 @@ function checkStart(){
 function startGame(){
   companiesData={}; 
   players.filter(p=>p.company).forEach(p=>{
-    companiesData[p.company]={player:p.name.trim()||"Spieler",capital:1000,values:[10000]};
+    companiesData[p.company]={player:p.name.trim()||"Spieler",capital:1000,values:[10000],share:100};
   });
   current=0; 
   const first=Object.keys(companiesData)[0]; 
@@ -579,6 +590,12 @@ function renderGame(){
   document.getElementById("capital").textContent=data.capital.toLocaleString('de-CH');
   document.getElementById("valueCurrent").textContent=currentLast().toLocaleString('de-CH');
 
+  /* Anteil anzeigen (Standard 100%) */
+  const share = (typeof data.share === "number") ? data.share : 100;
+  companiesData[company].share = share; // sicherstellen, dass Feld existiert
+  const shareEl = document.getElementById("shareCurrent");
+  if(shareEl) shareEl.textContent = share;
+
   const values=data.values;
   if(chart) chart.destroy();
   const ctx=document.getElementById("chart").getContext("2d");
@@ -622,6 +639,19 @@ function updateCapital(isPlus){
   const val=+document.getElementById("capitalInput").value || 0;
   const k=currentKey(); companiesData[k].capital += isPlus?val:-val;
   renderGame(); saveState();
+}
+
+/* Eigentumsanteil ändern */
+function updateShare(isPlus){
+  const val = +document.getElementById("shareInput").value || 0;
+  const k = currentKey();
+  const d = companiesData[k];
+  if(!("share" in d)) d.share = 100;
+  let newShare = d.share + (isPlus ? val : -val);
+  newShare = Math.min(100, Math.max(0, newShare)); // Begrenzung 0–100 %
+  d.share = newShare;
+  renderGame(); 
+  saveState();
 }
 
 /* ===== Taschenrechner Logik ===== */
