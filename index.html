@@ -208,7 +208,7 @@
   <div class="tabs" id="tabs"></div>
 
   <div class="grid" style="margin-top:10px">
-    <!-- Linke Box: Spieler/Kapital + Logo + Taschenrechner -->
+    <!-- Linke Box: Spieler/Kapital + Rechner + Investoren + Logo -->
     <div class="box" id="infoBox">
       <h3>Spieler & Kapital</h3>
       <p>Spieler: <strong id="playerName">–</strong></p>
@@ -249,6 +249,18 @@
           <button type="button" class="eq" onclick="calcEval()">=</button>
           <button type="button" onclick="calcToCapital()">→ Kapital</button>
           <button type="button" onclick="calcToValue()">→ Wert</button>
+        </div>
+      </div>
+
+      <!-- INVESTOREN-BEREICH -->
+      <div class="box" style="margin-top:15px; padding:12px;">
+        <h4>Investoren</h4>
+        <div id="investorList" style="font-size:0.9rem; margin-bottom:10px; min-height:20px;">
+          <em>Keine Investoren aktiv</em>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button type="button" class="ghost" onclick="drawInvestor()">Investor ziehen</button>
+          <button type="button" class="danger" onclick="clearInvestors()">Alle entfernen</button>
         </div>
       </div>
 
@@ -338,9 +350,28 @@ const LOGO_SOURCES = {
   "Aston Martin": ["assets/astonmartin.svg",  "https://upload.wikimedia.org/wikipedia/commons/f/fb/Aston_Martin_logo.svg"]
 };
 
+/* ===== INVESTOREN-DEFINITION ===== */
+const INVESTORS = [
+  { name: "Aurora Capital Group", bonus: 6000, percent: 12 },
+  { name: "Velocity Venture Partners", bonus: 5500, percent: 11 },
+  { name: "Quantum Gear Investments", bonus: 7000, percent: 15 },
+  { name: "Prime Motion Equity", bonus: 6800, percent: 14 },
+  { name: "Vanguard Auto Holdings", bonus: 5000, percent: 10 },
+  { name: "Hyperlink Dynamics Fund", bonus: 8000, percent: 17 },
+  { name: "IonDrive Innovations", bonus: 7500, percent: 16 },
+  { name: "Synapse Mobility Ventures", bonus: 6200, percent: 13 },
+  { name: "NeonTorque Capital", bonus: 9000, percent: 18 },
+  { name: "AutomaCore Investments", bonus: 5800, percent: 12 },
+  { name: "Crimson Apex Fund", bonus: 10000, percent: 20 },
+  { name: "Blackridge Mobility Group", bonus: 8500, percent: 19 },
+  { name: "OmegaShift Capital", bonus: 7800, percent: 18 },
+  { name: "GreenServo Partners", bonus: 3500, percent: 6 },
+  { name: "TorqueSeed Investors", bonus: 4000, percent: 8 }
+];
+
 /* ===== Zustand ===== */
 let players=[];           // Lobby-Spieler
-let companiesData={};     // { company: {player, capital, values[], share} }
+let companiesData={};     // { company: {player, capital, values[], share, investors[]} }
 let current=0;            // aktiver Tab Index
 let chart;                // Chart.js-Instanz
 let screen="start";       // "start" | "lobby" | "game"
@@ -391,7 +422,6 @@ function resumeGame(){
   current = +s.current || 0;
   screen  = s.screen || "start";
 
-  // View setzen
   document.getElementById("startMenu").classList.add("hidden");
   document.getElementById("lobby").classList.add("hidden");
   document.getElementById("game").classList.add("hidden");
@@ -427,7 +457,6 @@ function backToLobby(){
 function newGame(){
   if(!confirm("Neues Spiel starten? Der gespeicherte Spielstand wird gelöscht.")) return;
   players=[]; companiesData={}; current=0; screen="start"; discardSaved();
-  // Views:
   document.getElementById("startMenu").classList.remove("hidden");
   document.getElementById("lobby").classList.add("hidden");
   document.getElementById("game").classList.add("hidden");
@@ -440,7 +469,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const o=document.createElement("option"); o.value=c; o.textContent=c; sel.appendChild(o);
   });
 
-  // Resume-Banner zeigen, wenn Speicher vorhanden:
   if(hasSaved()){
     document.getElementById("resumeBar").classList.add("show");
   }
@@ -458,7 +486,7 @@ function confirmSingle(){
   if(!company) return;
 
   companiesData={}; 
-  companiesData[company]={player:name,capital:1000,values:[10000],share:100}; 
+  companiesData[company]={player:name,capital:1000,values:[10000],share:100,investors:[]}; 
   current=0;
   screen="game";
 
@@ -512,7 +540,7 @@ function checkStart(){
 function startGame(){
   companiesData={}; 
   players.filter(p=>p.company).forEach(p=>{
-    companiesData[p.company]={player:p.name.trim()||"Spieler",capital:1000,values:[10000],share:100};
+    companiesData[p.company]={player:p.name.trim()||"Spieler",capital:1000,values:[10000],share:100,investors:[]};
   });
   current=0; 
   const first=Object.keys(companiesData)[0]; 
@@ -585,6 +613,9 @@ function currentLast(){ const v=currentValues(); return v[v.length-1]; }
 /* Chart Render */
 function renderGame(){
   const company=currentKey(), data=companiesData[company];
+
+  if(!data.investors) data.investors = []; // sicherstellen
+
   document.getElementById("companyName").textContent="Firma: "+company;
   document.getElementById("playerName").textContent=data.player;
   document.getElementById("capital").textContent=data.capital.toLocaleString('de-CH');
@@ -592,7 +623,7 @@ function renderGame(){
 
   /* Anteil anzeigen (Standard 100%) */
   const share = (typeof data.share === "number") ? data.share : 100;
-  companiesData[company].share = share; // sicherstellen, dass Feld existiert
+  companiesData[company].share = share;
   const shareEl = document.getElementById("shareCurrent");
   if(shareEl) shareEl.textContent = share;
 
@@ -616,6 +647,8 @@ function renderGame(){
       scales:{ y:{ beginAtZero:true } }, plugins:{ legend:{ display:false } }
     }
   });
+
+  renderInvestors();
 }
 
 /* Wert ändern */
@@ -648,10 +681,75 @@ function updateShare(isPlus){
   const d = companiesData[k];
   if(!("share" in d)) d.share = 100;
   let newShare = d.share + (isPlus ? val : -val);
-  newShare = Math.min(100, Math.max(0, newShare)); // Begrenzung 0–100 %
+  newShare = Math.min(100, Math.max(0, newShare)); // 0–100 %
   d.share = newShare;
   renderGame(); 
   saveState();
+}
+
+/* ===== INVESTOREN-FUNKTIONEN ===== */
+
+function drawInvestor(){
+  const company = currentKey();
+  const d = companiesData[company];
+  if(!d.investors) d.investors = [];
+
+  const inv = INVESTORS[Math.floor(Math.random() * INVESTORS.length)];
+
+  d.investors.push({
+    name: inv.name,
+    bonus: inv.bonus,
+    percent: inv.percent
+    // Runden könnt ihr im Brettspiel separat mitzählen
+  });
+
+  // Bonus auszahlen
+  d.capital += inv.bonus;
+
+  saveState();
+  renderGame();
+}
+
+function clearInvestors(){
+  const company = currentKey();
+  const d = companiesData[company];
+  d.investors = [];
+  saveState();
+  renderGame();
+}
+
+function removeInvestor(index){
+  const company = currentKey();
+  const d = companiesData[company];
+  if(!d.investors) return;
+  d.investors.splice(index,1);
+  saveState();
+  renderGame();
+}
+
+function renderInvestors(){
+  const company = currentKey();
+  const d = companiesData[company];
+  const div = document.getElementById("investorList");
+  if(!div) return;
+
+  if(!d.investors || d.investors.length === 0){
+    div.innerHTML = "<em>Keine Investoren aktiv</em>";
+    return;
+  }
+
+  div.innerHTML = d.investors.map((inv, i) => `
+    <div style="margin-bottom:6px; padding:6px; border:1px solid #ddd; border-radius:8px; background:#f9fafb;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+        <div>
+          <strong>${inv.name}</strong><br>
+          Bonus: +${inv.bonus.toLocaleString("de-CH")} CHF<br>
+          Abzug: ${inv.percent}%
+        </div>
+        <button type="button" class="danger" style="padding:4px 8px;font-size:0.75rem;" onclick="removeInvestor(${i})">Entfernen</button>
+      </div>
+    </div>
+  `).join("");
 }
 
 /* ===== Taschenrechner Logik ===== */
