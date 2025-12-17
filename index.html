@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
   :root{
-    --brand:#0a6cff;        /* pro Marke gesetzt */
+    --brand:#0a6cff;
     --brand-2:#0046a4;
     --ink:#0f172a;
     --card:#ffffffee;
@@ -116,7 +116,6 @@
   .calcActions button{ background:#eefbf3; color:#065f46; border:1px solid #bbf7d0 }
 
   /* Quellen-Dialog */
-  .credits{font-size:.9rem;text-decoration:underline;background:#fff8e1;border:1px dashed #f1ca55;color:#5a3f00}
   dialog{border:none;border-radius:14px;padding:0;max-width:680px;width:92vw}
   dialog .content{padding:16px}
   dialog::backdrop{background:rgba(0,0,0,.35)}
@@ -131,6 +130,12 @@
     display:none; margin-bottom:12px; padding:10px 12px; border:1px solid #c7f9cc; background:#effcf1; border-radius:12px;
   }
   .resume.show{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+
+  /* kleine Entfern-Buttons in Investoren */
+  .miniDanger{
+    padding:4px 8px !important;
+    font-size:0.75rem !important;
+  }
 </style>
 </head>
 <body>
@@ -208,7 +213,7 @@
   <div class="tabs" id="tabs"></div>
 
   <div class="grid" style="margin-top:10px">
-    <!-- Linke Box: Spieler/Kapital + Rechner + Investoren + Logo -->
+    <!-- Linke Box -->
     <div class="box" id="infoBox">
       <h3>Spieler & Kapital</h3>
       <p>Spieler: <strong id="playerName">–</strong></p>
@@ -242,6 +247,8 @@
           <button type="button" onclick="calcIns('0')">0</button>
           <button type="button" onclick="calcIns('.')">.</button>
           <button type="button" onclick="calcIns('(')">(</button>
+          <button type="button" class="op" onclick="calcIns('+')">+</button>
+
           <button type="button" onclick="calcIns(')')">)</button>
         </div>
         <div class="calcActions">
@@ -252,16 +259,29 @@
         </div>
       </div>
 
-      <!-- INVESTOREN-BEREICH -->
+      <!-- INVESTOREN -->
       <div class="box" style="margin-top:15px; padding:12px;">
         <h4>Investoren</h4>
+
+        <!-- Totals -->
+        <div id="investorTotals" style="font-size:0.9rem; margin-bottom:8px;">
+          <span class="brandPill">Total Bonus: <strong><span id="invTotalBonus">0</span></strong> CHF</span>
+          <span class="brandPill">Total Abzug: <strong><span id="invTotalPct">0</span></strong>%</span>
+        </div>
+
+        <!-- Liste -->
         <div id="investorList" style="font-size:0.9rem; margin-bottom:10px; min-height:20px;">
           <em>Keine Investoren aktiv</em>
         </div>
+
         <div class="row" style="margin-top:6px">
           <button type="button" class="ghost" onclick="drawInvestor()">Investor ziehen</button>
+          <button type="button" class="ghost" onclick="tickInvestors()">Runde -1</button>
           <button type="button" class="danger" onclick="clearInvestors()">Alle entfernen</button>
         </div>
+        <p style="margin:8px 0 0; color:#4b5563; font-size:.9rem;">
+          „Runde -1“ reduziert die Laufzeit der Investoren dieser Firma. Bei 0 Runden werden sie entfernt.
+        </p>
       </div>
 
       <!-- Großes Logo -->
@@ -270,7 +290,7 @@
       </div>
     </div>
 
-    <!-- Rechte Box: Graph + Wert + Eigentumsanteil -->
+    <!-- Rechte Box -->
     <div class="box">
       <h3>Wertentwicklung</h3>
       <p style="margin:0 0 6px"><strong id="valueLabel">Wert:</strong> <span id="valueCurrent">10’000</span> CHF</p>
@@ -282,22 +302,40 @@
         <button type="button" onclick="addValue(false)">– Wert</button>
       </div>
 
+      <!-- NUR 15% / 20% -->
       <div class="row" style="margin-top:6px">
-        <input type="number" id="valuePctInput" value="10" min="1" step="1">
+        <select id="valuePctSelect" aria-label="Prozent wählen">
+          <option value="15" selected>15%</option>
+          <option value="20">20%</option>
+        </select>
         <button type="button" onclick="addValuePct(true)">+ %</button>
         <button type="button" onclick="addValuePct(false)">– %</button>
-        <span class="brandPill">Ändern um Prozent</span>
+        <span class="brandPill">Nur 15% oder 20%</span>
       </div>
 
-      <!-- Eigentumsanteil -->
+      <!-- Eigentumsanteil + Verkauf -->
       <div class="box" style="margin-top:10px">
         <h4>Eigentumsanteil</h4>
         <p><strong>Anteil:</strong> <span id="shareCurrent">100</span>%</p>
+
         <div class="row">
           <input type="number" id="shareInput" value="5" min="1" step="1">
           <button type="button" onclick="updateShare(true)">+ %</button>
           <button type="button" onclick="updateShare(false)">– %</button>
         </div>
+
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:10px 0">
+
+        <p style="margin:0 0 6px"><strong>Anteil verkaufen</strong></p>
+        <div class="row">
+          <input type="number" id="sellPctInput" value="5" min="1" step="1" oninput="updateSellPreview()">
+          <span class="brandPill">%</span>
+          <span class="brandPill">Du bekommst: <strong><span id="sellPayout">0</span></strong> CHF</span>
+          <button type="button" onclick="sellShares()">Verkaufen</button>
+        </div>
+        <p style="margin:8px 0 0; color:#4b5563; font-size:.9rem;">
+          Betrag = Verkauf-% vom aktuellen Firmenwert. Anteil sinkt, Kapital steigt.
+        </p>
       </div>
     </div>
   </div>
@@ -320,15 +358,14 @@
   </div>
 </dialog>
 
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-/* ===== Markenliste (mit Aston Martin statt Pagani) ===== */
+/* ===== Markenliste ===== */
 const ALL_COMPANIES = [
   "McLaren","Porsche","Koenigsegg","Ferrari","Lamborghini","Bugatti","Aston Martin"
 ];
 
-/* Farbtöne (nahe an CI) */
+/* Themes */
 const THEMES = {
   "McLaren":     {brand:"#ff8700", brand2:"#c85f00", bg1:"#fff6ed", bg2:"#ffe7cf"},
   "Porsche":     {brand:"#e4002b", brand2:"#a30b1a", bg1:"#fff4f4", bg2:"#ffe6e4"},
@@ -339,7 +376,7 @@ const THEMES = {
   "Aston Martin":{brand:"#005a2b", brand2:"#0b3a2b", bg1:"#eaf5ef", bg2:"#d8eee3"}
 };
 
-/* Logo-Quellen – lokales Asset zuerst, dann Wikimedia-Fallback */
+/* Logos */
 const LOGO_SOURCES = {
   "McLaren":      ["assets/mclaren.svg",      "https://upload.wikimedia.org/wikipedia/commons/5/55/McLaren_Automotive_logo.svg"],
   "Porsche":      ["assets/porsche.svg",      "https://upload.wikimedia.org/wikipedia/commons/1/1e/Porsche_logo.svg"],
@@ -350,7 +387,7 @@ const LOGO_SOURCES = {
   "Aston Martin": ["assets/astonmartin.svg",  "https://upload.wikimedia.org/wikipedia/commons/f/fb/Aston_Martin_logo.svg"]
 };
 
-/* ===== INVESTOREN-DEFINITION ===== */
+/* Investoren (15) */
 const INVESTORS = [
   { name: "Aurora Capital Group", bonus: 6000, percent: 12 },
   { name: "Velocity Venture Partners", bonus: 5500, percent: 11 },
@@ -370,26 +407,19 @@ const INVESTORS = [
 ];
 
 /* ===== Zustand ===== */
-let players=[];           // Lobby-Spieler
-let companiesData={};     // { company: {player, capital, values[], share, investors[]} }
-let current=0;            // aktiver Tab Index
-let chart;                // Chart.js-Instanz
-let screen="start";       // "start" | "lobby" | "game"
+let players=[];
+let companiesData={}; // { company: {player, capital, values[], share, investors[] } }
+let current=0;
+let chart;
+let screen="start";
 
-/* ==== Persistenz (Autosave) ==== */
-const STORAGE_KEY = "firmenspiel_state_v2";
+/* ==== Persistenz ==== */
+const STORAGE_KEY = "firmenspiel_state_v3";
 
 function saveState(){
-  const state = {
-    players,
-    companiesData,
-    current,
-    screen,
-    timestamp: Date.now()
-  };
+  const state = { players, companiesData, current, screen, timestamp: Date.now() };
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e){}
 }
-
 function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -397,26 +427,15 @@ function loadState(){
     return JSON.parse(raw);
   }catch(e){ return null; }
 }
-
-function hasSaved(){
-  return !!localStorage.getItem(STORAGE_KEY);
-}
-
+function hasSaved(){ return !!localStorage.getItem(STORAGE_KEY); }
 function discardSaved(){
   localStorage.removeItem(STORAGE_KEY);
   document.getElementById("resumeBar").classList.remove("show");
 }
+function manualSave(){ saveState(); alert("Spielstand gespeichert (lokal auf diesem Gerät)."); }
 
-/* Manuelles Speichern (UI-Button) */
-function manualSave(){
-  saveState();
-  alert("Spielstand gespeichert (lokal auf diesem Gerät).");
-}
-
-/* Fortsetzen aus Banner */
 function resumeGame(){
-  const s = loadState();
-  if(!s) return;
+  const s = loadState(); if(!s) return;
   players = s.players || [];
   companiesData = s.companiesData || {};
   current = +s.current || 0;
@@ -425,6 +444,7 @@ function resumeGame(){
   document.getElementById("startMenu").classList.add("hidden");
   document.getElementById("lobby").classList.add("hidden");
   document.getElementById("game").classList.add("hidden");
+
   if(screen==="start"){
     document.getElementById("startMenu").classList.remove("hidden");
   }else if(screen==="lobby"){
@@ -486,7 +506,7 @@ function confirmSingle(){
   if(!company) return;
 
   companiesData={}; 
-  companiesData[company]={player:name,capital:1000,values:[10000],share:100,investors:[]}; 
+  companiesData[company]={player:name,capital:1000,values:[10000],share:100,investors:[]}; // kein Investor am Anfang
   current=0;
   screen="game";
 
@@ -569,7 +589,7 @@ function renderTabs(){
   });
 }
 
-/* ======== LOGO-LOADER mit Fallbacks ======== */
+/* Logo loader */
 function loadWithFallback(urls, onSuccess, onFail){
   if(!urls || urls.length===0){ onFail && onFail(); return; }
   const [head, ...rest] = urls;
@@ -580,7 +600,7 @@ function loadWithFallback(urls, onSuccess, onFail){
   test.src = head;
 }
 
-/* Theme + Logo im linken Kasten */
+/* Theme + Logo */
 function applyTheme(company){
   const t=THEMES[company]||{};
   document.documentElement.style.setProperty('--brand', t.brand||'#0a6cff');
@@ -602,7 +622,7 @@ function applyTheme(company){
       img.alt = company + " Logo";
       img.style.display = "block";
     },
-    ()=>{ /* nichts anzeigen, wenn alles fehlschlägt */ }
+    ()=>{}
   );
 }
 
@@ -610,23 +630,21 @@ function currentKey(){ return Object.keys(companiesData)[current]; }
 function currentValues(){ return companiesData[currentKey()].values; }
 function currentLast(){ const v=currentValues(); return v[v.length-1]; }
 
-/* Chart Render */
+/* ===== Render ===== */
 function renderGame(){
   const company=currentKey(), data=companiesData[company];
+  if(!data) return;
 
-  if(!data.investors) data.investors = []; // sicherstellen
+  if(!data.investors) data.investors = [];
+  if(typeof data.share !== "number") data.share = 100;
 
   document.getElementById("companyName").textContent="Firma: "+company;
   document.getElementById("playerName").textContent=data.player;
   document.getElementById("capital").textContent=data.capital.toLocaleString('de-CH');
   document.getElementById("valueCurrent").textContent=currentLast().toLocaleString('de-CH');
+  document.getElementById("shareCurrent").textContent=data.share;
 
-  /* Anteil anzeigen (Standard 100%) */
-  const share = (typeof data.share === "number") ? data.share : 100;
-  companiesData[company].share = share;
-  const shareEl = document.getElementById("shareCurrent");
-  if(shareEl) shareEl.textContent = share;
-
+  // Chart
   const values=data.values;
   if(chart) chart.destroy();
   const ctx=document.getElementById("chart").getContext("2d");
@@ -649,17 +667,22 @@ function renderGame(){
   });
 
   renderInvestors();
+  updateSellPreview();
 }
 
-/* Wert ändern */
+/* ===== Wert ändern ===== */
 function addValue(isPlus){
   const delta=+document.getElementById("valueInput").value || 0;
   const arr=currentValues(), last=arr[arr.length-1];
-  arr.push(last + (isPlus?delta:-delta));
+  arr.push(Math.max(0, last + (isPlus?delta:-delta)));
   renderGame(); saveState();
 }
+
+/* nur 15/20% */
 function addValuePct(isPlus){
-  const pct=+document.getElementById("valuePctInput").value || 0;
+  const sel = document.getElementById("valuePctSelect");
+  const pct = sel ? (+sel.value || 15) : 15;
+
   const arr=currentValues(), last=arr[arr.length-1];
   const factor=isPlus?(1+pct/100):(1-pct/100);
   const next=Math.max(0, Math.round(last*factor));
@@ -667,28 +690,65 @@ function addValuePct(isPlus){
   renderGame(); saveState();
 }
 
-/* Kapital ändern */
+/* ===== Kapital ändern ===== */
 function updateCapital(isPlus){
   const val=+document.getElementById("capitalInput").value || 0;
   const k=currentKey(); companiesData[k].capital += isPlus?val:-val;
   renderGame(); saveState();
 }
 
-/* Eigentumsanteil ändern */
+/* ===== Anteil ändern ===== */
 function updateShare(isPlus){
   const val = +document.getElementById("shareInput").value || 0;
   const k = currentKey();
   const d = companiesData[k];
-  if(!("share" in d)) d.share = 100;
+  if(typeof d.share !== "number") d.share = 100;
   let newShare = d.share + (isPlus ? val : -val);
-  newShare = Math.min(100, Math.max(0, newShare)); // 0–100 %
+  newShare = Math.min(100, Math.max(0, newShare));
   d.share = newShare;
   renderGame(); 
   saveState();
 }
 
-/* ===== INVESTOREN-FUNKTIONEN ===== */
+/* ===== Anteil verkaufen: Vorschau + Verkauf ===== */
+function updateSellPreview(){
+  const k = currentKey();
+  const d = companiesData[k];
+  if(!d) return;
 
+  const sellPct = Math.max(0, +document.getElementById("sellPctInput").value || 0);
+  const ownPct  = Math.max(0, d.share || 0);
+  const pctUsed = Math.min(sellPct, ownPct);
+
+  const firmValue = currentLast(); // aktueller Firmenwert
+  const payout = Math.round(firmValue * (pctUsed/100));
+
+  const payoutEl = document.getElementById("sellPayout");
+  if(payoutEl) payoutEl.textContent = payout.toLocaleString("de-CH");
+}
+
+function sellShares(){
+  const k = currentKey();
+  const d = companiesData[k];
+  if(!d) return;
+
+  let sellPct = Math.max(0, +document.getElementById("sellPctInput").value || 0);
+  if(sellPct <= 0) return;
+
+  if(typeof d.share !== "number") d.share = 100;
+
+  const pctUsed = Math.min(sellPct, d.share);
+  const firmValue = currentLast();
+  const payout = Math.round(firmValue * (pctUsed/100));
+
+  d.share = Math.max(0, d.share - pctUsed);
+  d.capital += payout;
+
+  renderGame();
+  saveState();
+}
+
+/* ===== Investoren ===== */
 function drawInvestor(){
   const company = currentKey();
   const d = companiesData[company];
@@ -699,12 +759,22 @@ function drawInvestor(){
   d.investors.push({
     name: inv.name,
     bonus: inv.bonus,
-    percent: inv.percent
-    // Runden könnt ihr im Brettspiel separat mitzählen
+    percent: inv.percent,
+    rounds: 5
   });
 
-  // Bonus auszahlen
   d.capital += inv.bonus;
+  saveState();
+  renderGame();
+}
+
+function tickInvestors(){
+  const company = currentKey();
+  const d = companiesData[company];
+  if(!d.investors) d.investors = [];
+
+  d.investors.forEach(x => x.rounds = (typeof x.rounds === "number" ? x.rounds - 1 : 0));
+  d.investors = d.investors.filter(x => (typeof x.rounds === "number" ? x.rounds : 0) > 0);
 
   saveState();
   renderGame();
@@ -721,8 +791,8 @@ function clearInvestors(){
 function removeInvestor(index){
   const company = currentKey();
   const d = companiesData[company];
-  if(!d.investors) return;
-  d.investors.splice(index,1);
+  if(!d.investors) d.investors = [];
+  d.investors.splice(index, 1);
   saveState();
   renderGame();
 }
@@ -730,37 +800,44 @@ function removeInvestor(index){
 function renderInvestors(){
   const company = currentKey();
   const d = companiesData[company];
-  const div = document.getElementById("investorList");
-  if(!div) return;
+  if(!d.investors) d.investors = [];
 
-  if(!d.investors || d.investors.length === 0){
-    div.innerHTML = "<em>Keine Investoren aktiv</em>";
+  const list = document.getElementById("investorList");
+  const totalBonusEl = document.getElementById("invTotalBonus");
+  const totalPctEl = document.getElementById("invTotalPct");
+  if(!list) return;
+
+  const totalBonus = d.investors.reduce((s,x)=>s+(+x.bonus||0),0);
+  const totalPct   = d.investors.reduce((s,x)=>s+(+x.percent||0),0);
+  if(totalBonusEl) totalBonusEl.textContent = totalBonus.toLocaleString("de-CH");
+  if(totalPctEl) totalPctEl.textContent = totalPct;
+
+  if(d.investors.length===0){
+    list.innerHTML = "<em>Keine Investoren aktiv</em>";
     return;
   }
 
-  div.innerHTML = d.investors.map((inv, i) => `
+  list.innerHTML = d.investors.map((inv,i)=>`
     <div style="margin-bottom:6px; padding:6px; border:1px solid #ddd; border-radius:8px; background:#f9fafb;">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
         <div>
           <strong>${inv.name}</strong><br>
-          Bonus: +${inv.bonus.toLocaleString("de-CH")} CHF<br>
-          Abzug: ${inv.percent}%
+          Bonus: +${(+inv.bonus).toLocaleString("de-CH")} CHF<br>
+          Abzug: ${inv.percent}% • Runden: ${inv.rounds}
         </div>
-        <button type="button" class="danger" style="padding:4px 8px;font-size:0.75rem;" onclick="removeInvestor(${i})">Entfernen</button>
+        <button type="button" class="danger miniDanger" onclick="removeInvestor(${i})">Entfernen</button>
       </div>
     </div>
   `).join("");
 }
 
-/* ===== Taschenrechner Logik ===== */
+/* ===== Taschenrechner ===== */
 function calcIns(txt){
   const el=document.getElementById("calcDisplay");
   el.value += txt;
   el.focus();
 }
-function calcClear(){
-  document.getElementById("calcDisplay").value="";
-}
+function calcClear(){ document.getElementById("calcDisplay").value=""; }
 function calcEval(){
   const el=document.getElementById("calcDisplay");
   const expr = el.value.trim();
@@ -787,10 +864,10 @@ function calcToValue(){
   if(!isNaN(v)){ document.getElementById("valueInput").value = v; }
 }
 
-/* Vor Verlassen der Seite sicherheitshalber speichern */
+/* Sicherheits-Save */
 window.addEventListener("beforeunload", saveState);
 
-/* Mehrspieler-Defaults */
+/* Mehrspieler Defaults */
 resetLobby();
 </script>
 </body>
